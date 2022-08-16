@@ -1,0 +1,25 @@
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: similarityapi-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: similarityapi
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+#  - type: Pods
+#    pods:
+#      metric:
+#        name: packets-per-second
+#      target:
+#        type: AverageValue
+#        averageValue: 1k

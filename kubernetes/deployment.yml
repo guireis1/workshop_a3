@@ -1,0 +1,36 @@
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: similarityapi 
+spec:
+  replicas: #replicaNo#
+  selector:
+    matchLabels:
+      app: similarityapi
+  template:
+    metadata:
+      labels:
+        app: similarityapi 
+    spec:
+      containers:
+        - name: similarityapi 
+          image: pipelinegui.azurecr.io/similarityapi
+          ports:
+          - containerPort: 80
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 10
+            failureThreshold: 3
+            initialDelaySeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 10
+            failureThreshold: 5
+            initialDelaySeconds: 15
+          resources:
+            requests:
+              cpu: 1000m

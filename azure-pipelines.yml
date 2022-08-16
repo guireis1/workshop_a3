@@ -1,0 +1,88 @@
+trigger:
+- main
+
+resources:
+- repo: self
+
+variables:
+  imageRepo: similarityapi
+  tag: '$(Build.BuildId)'
+
+stages:
+- stage: Build
+  displayName: Build image
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        containerRegistry: 'pipelinegui'
+        repository: '$(imageRepo)'
+        command: 'buildAndPush'
+        Dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
+        tags: |
+          $(tag)
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(Pipeline.Workspace)/s/kubernetes'
+        artifact: 'manifests'
+        publishLocation: 'pipeline'
+
+- stage: Deploy
+  displayName: Deploy to dev
+  dependsOn: Build
+  variables:
+    acrsecret: k8sexampleacrauth
+    acrdevurl: 'pipelinegui.azurecr.io'
+    replicaNo: 1
+  jobs:
+  - deployment: Deploy
+    displayName: Deploy to AKS
+    environment: 'PipelineGui.default'
+    pool:
+      vmImage: ubuntu-latest
+    strategy:
+     runOnce:
+       deploy:
+          steps:
+          - task: DownloadPipelineArtifact@2
+            inputs:
+              buildType: 'current'
+              artifactName: 'manifests'
+              targetPath: '$(Pipeline.Workspace)/manifests'
+          - task: KubernetesManifest@0
+            inputs:
+              action: 'createSecret'
+              namespace: 'default'
+              secretType: 'dockerRegistry'
+              secretName: '$(acrsecret)'
+              dockerRegistryEndpoint: 'pipelinegui'
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@5
+            inputs:
+              rootDirectory: '$(Pipeline.Workspace)/manifests/'
+              targetFiles: 'deployment.yml'
+              encoding: 'auto'
+              tokenPattern: 'custom'
+              tokenPrefix: '#'
+              tokenSuffix: '#'
+              writeBOM: true
+              actionOnMissing: 'warn'
+              keepToken: false
+              actionOnNoFiles: 'continue'
+              enableTransforms: false
+              enableRecursion: false
+              useLegacyPattern: false
+              enableTelemetry: true
+          - task: KubernetesManifest@0
+            inputs:
+              action: 'deploy'
+              namespace: 'default'
+              manifests: |
+                $(Pipeline.Workspace)/manifests/deployment.yml
+                $(Pipeline.Workspace)/manifests/service.yml
+                $(Pipeline.Workspace)/manifests/hpa.yml
+              containers: '$(acrdevurl)/$(imageRepo):$(tag)'
